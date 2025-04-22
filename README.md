@@ -27,7 +27,7 @@ SmartMaintenance is built in iterative phases:
 - React Native Web (Expo) for cross-platform UI
 - ViroReact/AR.js for Augmented Reality
 - Socket.IO client for real-time updates
-- Victory/Chart-kit for data visualization
+- React Native Chart Kit for data visualization
 - React Navigation for routing
 
 ## Current Status
@@ -46,11 +46,33 @@ SmartMaintenance is built in iterative phases:
 - [x] Configure and update safety thresholds
 - [x] Store alerts in InfluxDB
 - [x] Emit alerts via Socket.IO
-- [x] Add real-time dashboard updates
+- [x] Add real-time dashboard updates with line charts
 - [x] Create alert notification system
-- [ ] Build maintenance request workflow
+- [x] Implement sensor history charts
+- [x] Add error handling and fallback UI components
 
-## Real-time Communication
+**Phase 3 - ML Anomaly Detection** (⏳ In Progress)
+- [ ] Set up FastAPI service
+- [ ] Implement /predict endpoint with scikit-learn
+- [ ] Integrate anomaly detection with Express
+- [ ] Create API routes for anomaly alerts
+- [ ] Update UI to display anomaly alerts
+
+## Features
+
+### Real-time Dashboard
+- Live updates of sensor readings (vibration, temperature, current)
+- Historical line charts showing sensor data trends
+- Visual indicators for safe/unsafe conditions
+- Expandable sensor cards with detailed information
+
+### Safety Alert System
+- Configurable thresholds for each sensor type
+- Real-time notifications when thresholds are exceeded
+- Alert history with timestamps and detailed information
+- Color-coded status indicators for quick assessment
+
+### Real-time Communication
 
 The application uses Socket.IO for real-time communication between the server and clients:
 

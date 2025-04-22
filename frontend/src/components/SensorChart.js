@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 
@@ -17,94 +17,92 @@ const SensorChart = ({
   color = '#2196F3',
   thresholdValue = null
 }) => {
-  const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Format and prepare chart data
-  useEffect(() => {
+  // Memoize the chart data to prevent unnecessary recalculations
+  const chartData = useMemo(() => {
     try {
-      if (currentValue !== undefined && currentValue !== null) {
-        // Create initial data if no historical data
-        if (!historicalData || historicalData.length === 0) {
-          // Generate 10 dummy points for demonstration
-          const now = new Date();
-          const dummyData = Array.from({ length: 10 }, (_, i) => {
-            const time = new Date(now);
-            time.setMinutes(now.getMinutes() - (10 - i));
-            
-            // Random value around the current reading
-            const variance = Math.random() * 0.3 - 0.15; // -15% to +15%
-            const value = currentValue * (1 + variance);
-            
-            return {
-              value: Math.round(value * 100) / 100,
-              timestamp: time.toISOString()
-            };
-          });
-          
-          // Add current reading
-          dummyData.push({
-            value: currentValue,
-            timestamp: now.toISOString()
-          });
-          
-          prepareChartData([...dummyData]);
-        } else {
-          // Use real historical data
-          prepareChartData([...historicalData, { value: currentValue, timestamp: new Date().toISOString() }]);
-        }
-      } else {
-        // Default data if currentValue is not defined
-        const defaultData = Array.from({ length: 5 }, (_, i) => ({
-          value: i * 10,
-          timestamp: new Date(Date.now() - (4 - i) * 60000).toISOString()
-        }));
-        prepareChartData(defaultData);
-      }
-    } catch (err) {
-      console.error("Error in SensorChart useEffect:", err);
-      setError(err.message || "Failed to prepare chart data");
-      setLoading(false);
-    }
-  }, [currentValue, historicalData]);
-
-  const prepareChartData = (data) => {
-    try {
-      if (!data || data.length === 0) {
-        setError("No data available for chart");
-        setLoading(false);
-        return;
+      if (!historicalData || historicalData.length === 0) {
+        return null;
       }
 
-      const sortedData = [...data].sort((a, b) => 
+      // Use up to 20 data points for best visualization
+      const maxPoints = 20;
+      
+      // Sort by timestamp (oldest first for chart display)
+      const sortedData = [...historicalData].sort((a, b) => 
         new Date(a.timestamp) - new Date(b.timestamp)
       );
       
-      // Limit to last 20 points for display clarity
-      const limitedData = sortedData.slice(-20);
+      // If we have too many points, sample them to get a smoother chart
+      let chartPoints = sortedData;
+      if (sortedData.length > maxPoints) {
+        const skipFactor = Math.ceil(sortedData.length / maxPoints);
+        chartPoints = sortedData.filter((_, index) => index % skipFactor === 0 || index === sortedData.length - 1);
+        
+        // Always include the latest point
+        if (chartPoints.length > 0 && chartPoints[chartPoints.length - 1] !== sortedData[sortedData.length - 1]) {
+          chartPoints.push(sortedData[sortedData.length - 1]);
+        }
+      }
+      
+      // Ensure we have the current value as the last point
+      if (chartPoints.length > 0 && chartPoints[chartPoints.length - 1].value !== currentValue) {
+        // Update the last point to match the current value displayed on the card
+        chartPoints[chartPoints.length - 1] = {
+          ...chartPoints[chartPoints.length - 1],
+          value: currentValue
+        };
+      }
+      
+      // Calculate min and max values for Y-axis with threshold at top
+      let minValue = 0;
+      let maxValue = 0;
+      
+      // If we have a threshold, use it as the maximum
+      if (thresholdValue && typeof thresholdValue === 'number') {
+        // Set the max value to exactly the threshold value
+        // This will place the threshold line at the top of the chart
+        maxValue = thresholdValue;
+        
+        // Add 20% padding to ensure the threshold line is visible
+        // This places the threshold at approximately 80% of the chart height
+        maxValue = maxValue * 1.2;
+        
+        // Set minimum to 0 or the lowest value if negative
+        minValue = Math.min(0, ...chartPoints.map(item => item.value));
+      } else {
+        // No threshold, just use data min/max with some padding
+        const highestValue = Math.max(...chartPoints.map(item => item.value));
+        maxValue = highestValue * 1.2;
+        minValue = Math.min(0, ...chartPoints.map(item => item.value));
+      }
       
       // Format for chart library
-      const chartData = {
-        labels: limitedData.map(item => {
+      const formattedChartData = {
+        labels: chartPoints.map(item => {
           const time = new Date(item.timestamp);
           return `${time.getHours()}:${time.getMinutes().toString().padStart(2, '0')}`;
         }),
         datasets: [
           {
-            data: limitedData.map(item => typeof item.value === 'number' ? item.value : 0),
+            data: chartPoints.map(item => typeof item.value === 'number' ? item.value : 0),
             color: () => color || '#2196F3',
             strokeWidth: 2,
           }
-        ]
+        ],
+        // Add fixed min and max values for consistent Y-axis
+        minValue: minValue,
+        maxValue: maxValue
       };
       
       // Add threshold line if provided, as a separate configuration
       if (thresholdValue && typeof thresholdValue === 'number') {
-        chartData.legend = [`${type} Readings`, `Max Threshold`];
+        formattedChartData.legend = [`${type} Readings`, `Max Threshold`];
         // Some versions of the chart library expect threshold as a dataset
-        const constantThreshold = Array(limitedData.length).fill(thresholdValue);
-        chartData.datasets.push({
+        const constantThreshold = Array(chartPoints.length).fill(thresholdValue);
+        formattedChartData.datasets.push({
           data: constantThreshold,
           color: () => 'rgba(255, 0, 0, 0.5)',
           strokeWidth: 1,
@@ -112,14 +110,20 @@ const SensorChart = ({
         });
       }
       
-      setChartData(chartData);
       setLoading(false);
+      return formattedChartData;
     } catch (err) {
       console.error("Error in prepareChartData:", err);
       setError(err.message || "Failed to process chart data");
       setLoading(false);
+      return null;
     }
-  };
+  }, [historicalData, currentValue, thresholdValue, type, color]);
+
+  // Set loading state when dependencies change
+  useEffect(() => {
+    setLoading(!chartData);
+  }, [chartData]);
 
   if (error) {
     return (
@@ -149,10 +153,14 @@ const SensorChart = ({
     );
   }
 
+  // Log rendering to track updates
+  console.log(`Rendering chart for ${type} with ${chartData.datasets[0].data.length} points`);
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{type || 'Sensor'} History</Text>
       <LineChart
+        key={`chart-${type}-${historicalData.length}`}
         data={chartData}
         width={CHART_WIDTH}
         height={CHART_HEIGHT}
@@ -193,6 +201,13 @@ const SensorChart = ({
         withVerticalLines={false}
         yAxisSuffix={` ${unit || ''}`}
         segments={5}
+        // Use fixed y-axis min and max values
+        yAxisMinValue={chartData.minValue}
+        yAxisMaxValue={chartData.maxValue}
+        fromZero={chartData.minValue === 0} // Start from zero if min is zero
+        // Ensure the chart doesn't try to auto-scale
+        fromNumber={chartData.minValue}
+        toNumber={chartData.maxValue}
       />
     </View>
   );

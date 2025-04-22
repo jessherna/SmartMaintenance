@@ -6,6 +6,7 @@ import { useAuth } from './AuthContext';
 const defaultContext = {
   isConnected: false,
   sensorData: {},
+  sensorHistory: {},
   safetyAlerts: [],
   lastAlert: null,
   subscribe: () => console.warn('Socket context not initialized'),
@@ -26,6 +27,9 @@ export const SocketProvider = ({ children }) => {
   const [lastAlert, setLastAlert] = useState(null);
   const [error, setError] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Add history state for sensor readings
+  const [sensorHistory, setSensorHistory] = useState({});
 
   // Connect to socket when component mounts
   useEffect(() => {
@@ -83,6 +87,33 @@ export const SocketProvider = ({ children }) => {
   const handleSensorReadings = (data) => {
     console.log('SocketContext: Received sensor readings');
     setSensorData(data);
+    setIsConnected(true);
+    
+    // Store in history with timestamp
+    const timestamp = new Date().toISOString();
+    setSensorHistory(prevHistory => {
+      const newHistory = { ...prevHistory };
+      
+      // Update history for each sensor type
+      Object.entries(data).forEach(([type, reading]) => {
+        if (!newHistory[type]) {
+          newHistory[type] = [];
+        }
+        
+        // Add new reading with timestamp
+        newHistory[type].push({
+          ...reading,
+          timestamp
+        });
+        
+        // Keep only last 1500 readings (covers 24h at 1 reading per minute)
+        if (newHistory[type].length > 1500) {
+          newHistory[type] = newHistory[type].slice(-1500);
+        }
+      });
+      
+      return newHistory;
+    });
   };
 
   // Handle safety alerts update
@@ -101,6 +132,8 @@ export const SocketProvider = ({ children }) => {
       return uniqueAlerts.slice(0, 100); // Limit to 100 alerts
     });
     
+    setIsConnected(true);
+    
     // Update last alert with most recent one
     if (alerts.length > 0) {
       setLastAlert(alerts[0]);
@@ -111,6 +144,7 @@ export const SocketProvider = ({ children }) => {
   const handleSafetyAlert = (alert) => {
     console.log('SocketContext: Received safety alert for:', alert.type);
     setLastAlert(alert);
+    setIsConnected(true);
     setSafetyAlerts((prevAlerts) => {
       // Add new alert to the beginning
       const updatedAlerts = [alert, ...prevAlerts];
@@ -140,6 +174,7 @@ export const SocketProvider = ({ children }) => {
   const value = {
     isConnected,
     sensorData,
+    sensorHistory,
     safetyAlerts,
     lastAlert,
     subscribe,

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Animated } from 'react-native';
-import { Card, Title, Paragraph, Button, IconButton } from 'react-native-paper';
+import { Card, Title, Paragraph, Button, IconButton, ProgressBar } from 'react-native-paper';
 import SensorChart from './SensorChart';
 
 const SensorCard = ({ 
@@ -138,6 +138,26 @@ const SensorCard = ({
           </View>
         </View>
 
+        {data.sampled && (
+          <View style={styles.aggregationInfo}>
+            <Text style={styles.aggregationText}>
+              {data.periodMinutes}min view • Updated {data.updatedAt || 'recently'}
+            </Text>
+            {data.nextUpdateMinutes !== undefined && data.nextUpdateMinutes > 0 && (
+              <View style={styles.updateCountdown}>
+                <Text style={styles.nextUpdateText}>
+                  Next update in {data.nextUpdateMinutes} {data.nextUpdateMinutes === 1 ? 'minute' : 'minutes'}
+                </Text>
+                <ProgressBar 
+                  progress={1 - (data.nextUpdateMinutes / data.periodMinutes)} 
+                  color={config.color}
+                  style={styles.progressBar}
+                />
+              </View>
+            )}
+          </View>
+        )}
+
         <Paragraph style={styles.timestamp}>Updated: {formattedTimestamp}</Paragraph>
         
         <Animated.View style={[styles.chartContainer, { height: chartHeight, overflow: 'hidden' }]}>
@@ -241,6 +261,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#555',
   },
+  aggregationInfo: {
+    marginTop: 5,
+    marginBottom: 10,
+  },
+  aggregationText: {
+    fontSize: 12,
+    color: '#757575',
+  },
   timestamp: {
     fontSize: 12,
     color: '#757575',
@@ -251,6 +279,19 @@ const styles = StyleSheet.create({
   },
   detailsButton: {
     marginTop: 10,
+  },
+  nextUpdateText: {
+    fontSize: 12,
+    color: '#757575',
+    marginTop: 5,
+  },
+  updateCountdown: {
+    marginTop: 5,
+  },
+  progressBar: {
+    height: 4,
+    marginTop: 5,
+    borderRadius: 2,
   },
 });
 
