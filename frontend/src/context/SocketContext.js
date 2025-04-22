@@ -182,6 +182,7 @@ export const SocketProvider = ({ children }) => {
     clearAlerts: () => {
       console.log('SocketContext: Clearing alerts');
       setSafetyAlerts([]);
+      setLastAlert(null);
     },
     error
   };

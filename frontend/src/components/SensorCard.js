@@ -138,27 +138,30 @@ const SensorCard = ({
           </View>
         </View>
 
-        {data.sampled && (
-          <View style={styles.aggregationInfo}>
-            <Text style={styles.aggregationText}>
-              {data.periodMinutes}min view • Updated {data.updatedAt || 'recently'}
-            </Text>
-            {data.nextUpdateMinutes !== undefined && data.nextUpdateMinutes > 0 && (
-              <View style={styles.updateCountdown}>
-                <Text style={styles.nextUpdateText}>
-                  Next update in {data.nextUpdateMinutes} {data.nextUpdateMinutes === 1 ? 'minute' : 'minutes'}
-                </Text>
-                <ProgressBar 
-                  progress={1 - (data.nextUpdateMinutes / data.periodMinutes)} 
-                  color={config.color}
-                  style={styles.progressBar}
-                />
-              </View>
-            )}
-          </View>
-        )}
-
-        <Paragraph style={styles.timestamp}>Updated: {formattedTimestamp}</Paragraph>
+        {/* Display timestamp information in a consistent way */}
+        <View style={styles.timeInfo}>
+          {data.sampled ? (
+            <View style={styles.aggregationInfo}>
+              <Text style={styles.aggregationText}>
+                {data.periodMinutes}min view • Updated {data.updatedAt || 'recently'}
+              </Text>
+              {data.nextUpdateMinutes !== undefined && data.nextUpdateMinutes > 0 && (
+                <View style={styles.updateCountdown}>
+                  <Text style={styles.nextUpdateText}>
+                    Next update in {data.nextUpdateMinutes} {data.nextUpdateMinutes === 1 ? 'minute' : 'minutes'}
+                  </Text>
+                  <ProgressBar 
+                    progress={1 - (data.nextUpdateMinutes / data.periodMinutes)} 
+                    color={config.color}
+                    style={styles.progressBar}
+                  />
+                </View>
+              )}
+            </View>
+          ) : (
+            <Paragraph style={styles.timestamp}>Updated: {formattedTimestamp}</Paragraph>
+          )}
+        </View>
         
         <Animated.View style={[styles.chartContainer, { height: chartHeight, overflow: 'hidden' }]}>
           {expanded && (
@@ -168,7 +171,7 @@ const SensorCard = ({
               unit={data?.unit || ''} 
               historicalData={Array.isArray(historicalData) ? historicalData : []}
               color={config?.color || '#2196F3'}
-              thresholdValue={config?.threshold || 0}
+              thresholdValue={thresholdValue || config.threshold}
             />
           )}
         </Animated.View>
@@ -261,9 +264,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#555',
   },
-  aggregationInfo: {
+  timeInfo: {
     marginTop: 5,
-    marginBottom: 10,
+    marginBottom: 5,
+  },
+  aggregationInfo: {
+    marginTop: 0,
+    marginBottom: 0,
   },
   aggregationText: {
     fontSize: 12,
@@ -272,7 +279,6 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: 12,
     color: '#757575',
-    marginTop: 5,
   },
   chartContainer: {
     marginTop: 10,

@@ -52,7 +52,10 @@ const DashboardScreen = ({ navigation }) => {
     sensorHistory: contextSensorHistory = {},
     safetyAlerts = localSafetyAlerts, 
     lastAlert = localLastAlert,
-    clearAlerts = () => setLocalSafetyAlerts([])
+    clearAlerts = () => {
+      setLocalSafetyAlerts([]);
+      setLocalLastAlert(null); // Also clear the last alert to ensure banner disappears
+    }
   } = isUsingSocketContext ? socketContext : {};
   
   // Use context history if available, otherwise use local history
@@ -233,11 +236,11 @@ const DashboardScreen = ({ navigation }) => {
       );
     }
 
-    // Safety thresholds for each sensor type
+    // Safety thresholds for each sensor type - match these values with the backend thresholds
     const thresholds = {
-      VIBRATION: 2.0,
-      TEMPERATURE: 40.0,
-      CURRENT: 35.0
+      VIBRATION: 10.0,  // Updated from 2.0 to match backend's 10 mm/s
+      TEMPERATURE: 80.0, // Updated from 40.0 to match backend's 80°C
+      CURRENT: 40.0      // Updated from 35.0 to match backend's 40A
     };
 
     return Object.entries(filteredSensorData).map(([type, data]) => {
@@ -552,7 +555,7 @@ const DashboardScreen = ({ navigation }) => {
         </View>
       )}
 
-      {lastAlert && (
+      {safetyAlerts.length > 0 && lastAlert && (
         <TouchableOpacity 
           style={styles.latestAlertBanner}
           onPress={toggleAlertsModal}

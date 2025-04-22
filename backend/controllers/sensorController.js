@@ -5,12 +5,26 @@ const { SENSOR_TYPES } = require('../services/sensorSimulator');
 let latestReadings = {};
 let readingsHistory = [];
 
-// Maximum number of historical readings to keep
-const MAX_HISTORY_SIZE = 100;
+// Maximum number of historical readings to keep - increased for better visualization
+const MAX_HISTORY_SIZE = 300;
+
+// How often to store a reading in history (1 = every reading, 2 = every other reading, etc.)
+// This helps reduce memory usage and processing load
+const HISTORY_SAMPLING_RATE = 2; 
+
+// Counter to track readings for sampling
+let readingsCounter = 0;
 
 // Update latest readings (called by sensorSimulator)
 const updateLatestReadings = (readings) => {
+  // Always update latest readings
   latestReadings = readings;
+  
+  // Only store in history at the specified sampling rate
+  readingsCounter++;
+  if (readingsCounter % HISTORY_SAMPLING_RATE !== 0) {
+    return;
+  }
   
   // Add to history with timestamp
   const historyEntry = {
@@ -18,11 +32,13 @@ const updateLatestReadings = (readings) => {
     ...readings
   };
   
+  // Add to beginning of array for faster access to recent data
   readingsHistory.unshift(historyEntry);
   
-  // Limit history size
-  if (readingsHistory.length > MAX_HISTORY_SIZE) {
-    readingsHistory.pop();
+  // Limit history size - more efficient by removing a batch of items when threshold is exceeded
+  if (readingsHistory.length > MAX_HISTORY_SIZE + 50) {
+    // Remove a batch of oldest entries (50) to avoid frequent array operations
+    readingsHistory = readingsHistory.slice(0, MAX_HISTORY_SIZE);
   }
 };
 
@@ -70,16 +86,27 @@ exports.getLatestReadings = async (req, res) => {
  */
 exports.getReadingsHistory = async (req, res) => {
   try {
-    const { sensorType } = req.query;
+    const { sensorType, limit = 60 } = req.query;
+    
+    // Limit the number of readings returned to avoid large responses
+    const maxLimit = Math.min(parseInt(limit), 100);
     
     // Filter by sensor type if provided
-    let filteredHistory = readingsHistory;
+    let filteredHistory;
     
     if (sensorType) {
-      filteredHistory = readingsHistory.map(entry => {
-        const { timestamp, [sensorType]: sensorData } = entry;
-        return { timestamp, [sensorType]: sensorData };
-      });
+      // More efficient filtering by creating new objects with only the requested data
+      filteredHistory = readingsHistory
+        .slice(0, maxLimit)
+        .map(entry => {
+          const { timestamp, [sensorType]: sensorData } = entry;
+          if (!sensorData) return null; // Skip entries without data for this sensor
+          return { timestamp, [sensorType]: sensorData };
+        })
+        .filter(Boolean); // Remove null entries
+    } else {
+      // Just limit the size of the returned array
+      filteredHistory = readingsHistory.slice(0, maxLimit);
     }
 
     res.status(200).json({

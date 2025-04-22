@@ -1,10 +1,37 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 
 const { width } = Dimensions.get('window');
 const CHART_WIDTH = width - 40;
 const CHART_HEIGHT = 220;
+
+// Maximum number of data points to show in chart for performance
+const MAX_CHART_POINTS = 12;
+
+// Minimum time between chart recalculations (ms)
+const MIN_RECALCULATION_INTERVAL = 10000; // 10 seconds
+
+// Memoized function to avoid recalculations
+const formatTimestamp = (timestamp) => {
+  const time = new Date(timestamp);
+  return `${time.getHours()}:${time.getMinutes().toString().padStart(2, '0')}`;
+};
+
+// Deep equality check for arrays of objects to prevent unnecessary rerenders
+const areArraysEqual = (arr1, arr2) => {
+  if (!arr1 || !arr2) return false;
+  if (arr1.length !== arr2.length) return false;
+  
+  // Check only relevant properties to optimize comparison
+  for (let i = 0; i < arr1.length; i++) {
+    if (arr1[i].value !== arr2[i].value || 
+        arr1[i].timestamp !== arr2[i].timestamp) {
+      return false;
+    }
+  }
+  return true;
+};
 
 /**
  * Displays a line chart of historical sensor readings
@@ -19,37 +46,84 @@ const SensorChart = ({
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Store previously processed historical data for comparison
+  const prevProcessedDataRef = useRef([]);
+  
+  // Generate a stable chart ID that doesn't change with every render
+  const chartIdRef = useRef(`chart-${type}-${Math.random().toString(36).substring(2, 9)}`);
+  
+  // Keep track of last render time to throttle updates
+  const lastRenderTimeRef = useRef(0);
+  
+  // Keep a cached version of the last successfully generated chart data
+  const chartDataCacheRef = useRef(null);
 
   // Memoize the chart data to prevent unnecessary recalculations
   const chartData = useMemo(() => {
     try {
+      // Skip processing if data hasn't changed significantly
+      const now = Date.now();
+      
+      // If we have a recent calculation and the data hasn't changed much, use cached data
+      if (chartDataCacheRef.current && 
+          now - lastRenderTimeRef.current < MIN_RECALCULATION_INTERVAL) {
+        
+        // Only recalculate if the array content has changed significantly
+        const sortedData = [...historicalData].sort((a, b) => 
+          new Date(a.timestamp) - new Date(b.timestamp)
+        );
+        
+        // Sample the data points for a rough comparison (more efficient)
+        const samplingFactor = Math.max(1, Math.floor(sortedData.length / 5));
+        const sampledData = sortedData.filter((_, i) => i % samplingFactor === 0 || i === sortedData.length - 1);
+        
+        // Check if the data is substantially the same
+        if (areArraysEqual(sampledData, prevProcessedDataRef.current)) {
+          // Data is basically the same, so prevent recalculation
+          return chartDataCacheRef.current;
+        }
+      }
+      
       if (!historicalData || historicalData.length === 0) {
-        return null;
+        return chartDataCacheRef.current || null;
       }
 
-      // Use up to 20 data points for best visualization
-      const maxPoints = 20;
+      // Use fewer data points for better performance
+      const maxPoints = MAX_CHART_POINTS;
       
       // Sort by timestamp (oldest first for chart display)
       const sortedData = [...historicalData].sort((a, b) => 
         new Date(a.timestamp) - new Date(b.timestamp)
       );
       
+      // Save the processed data for future comparisons
+      const samplingFactor = Math.max(1, Math.floor(sortedData.length / 5));
+      prevProcessedDataRef.current = sortedData.filter((_, i) => i % samplingFactor === 0 || i === sortedData.length - 1);
+      
       // If we have too many points, sample them to get a smoother chart
       let chartPoints = sortedData;
       if (sortedData.length > maxPoints) {
         const skipFactor = Math.ceil(sortedData.length / maxPoints);
-        chartPoints = sortedData.filter((_, index) => index % skipFactor === 0 || index === sortedData.length - 1);
+        // More efficient filtering using array indexing
+        chartPoints = Array(Math.min(maxPoints, sortedData.length))
+          .fill(null)
+          .map((_, i) => {
+            const index = Math.min(i * skipFactor, sortedData.length - 1);
+            return sortedData[index];
+          });
         
         // Always include the latest point
-        if (chartPoints.length > 0 && chartPoints[chartPoints.length - 1] !== sortedData[sortedData.length - 1]) {
-          chartPoints.push(sortedData[sortedData.length - 1]);
+        if (chartPoints.length > 0 && 
+            chartPoints[chartPoints.length - 1] !== sortedData[sortedData.length - 1]) {
+          chartPoints[chartPoints.length - 1] = sortedData[sortedData.length - 1];
         }
       }
       
-      // Ensure we have the current value as the last point
-      if (chartPoints.length > 0 && chartPoints[chartPoints.length - 1].value !== currentValue) {
-        // Update the last point to match the current value displayed on the card
+      // Ensure we have the current value as the last point, but only update if different enough
+      if (chartPoints.length > 0 && 
+          Math.abs(chartPoints[chartPoints.length - 1].value - currentValue) > 0.1) {
+        // Only update if the difference is significant (more than 0.1 units)
         chartPoints[chartPoints.length - 1] = {
           ...chartPoints[chartPoints.length - 1],
           value: currentValue
@@ -79,15 +153,17 @@ const SensorChart = ({
         minValue = Math.min(0, ...chartPoints.map(item => item.value));
       }
       
+      // Round the min/max values for better labeling and stability
+      minValue = Math.floor(minValue);
+      maxValue = Math.ceil(maxValue);
+      
       // Format for chart library
       const formattedChartData = {
-        labels: chartPoints.map(item => {
-          const time = new Date(item.timestamp);
-          return `${time.getHours()}:${time.getMinutes().toString().padStart(2, '0')}`;
-        }),
+        // Pre-calculate labels to avoid doing this in render
+        labels: chartPoints.map(item => formatTimestamp(item.timestamp)),
         datasets: [
           {
-            data: chartPoints.map(item => typeof item.value === 'number' ? item.value : 0),
+            data: chartPoints.map(item => typeof item.value === 'number' ? parseFloat(item.value.toFixed(1)) : 0),
             color: () => color || '#2196F3',
             strokeWidth: 2,
           }
@@ -100,15 +176,27 @@ const SensorChart = ({
       // Add threshold line if provided, as a separate configuration
       if (thresholdValue && typeof thresholdValue === 'number') {
         formattedChartData.legend = [`${type} Readings`, `Max Threshold`];
-        // Some versions of the chart library expect threshold as a dataset
+        
+        // Ensure threshold is properly visible in the chart
+        // Create constant threshold line that will be visible at correct value
         const constantThreshold = Array(chartPoints.length).fill(thresholdValue);
+        
+        // Add threshold dataset
         formattedChartData.datasets.push({
           data: constantThreshold,
           color: () => 'rgba(255, 0, 0, 0.5)',
-          strokeWidth: 1,
+          strokeWidth: 2, // Make line thicker so it's more visible
           strokeDashArray: [5, 5]
         });
+        
+        // Ensure the max value includes the threshold
+        // This fixes cases where the threshold might not be visible
+        formattedChartData.maxValue = Math.max(maxValue, thresholdValue * 1.2);
       }
+      
+      // Update references
+      lastRenderTimeRef.current = now;
+      chartDataCacheRef.current = formattedChartData;
       
       setLoading(false);
       return formattedChartData;
@@ -116,16 +204,23 @@ const SensorChart = ({
       console.error("Error in prepareChartData:", err);
       setError(err.message || "Failed to process chart data");
       setLoading(false);
-      return null;
+      return chartDataCacheRef.current || null;
     }
   }, [historicalData, currentValue, thresholdValue, type, color]);
 
-  // Set loading state when dependencies change
+  // Update loading state only when necessary
   useEffect(() => {
-    setLoading(!chartData);
-  }, [chartData]);
+    if (!chartData && historicalData.length > 0 && !chartDataCacheRef.current) {
+      setLoading(true);
+    } else if (chartData) {
+      setLoading(false);
+    }
+  }, [chartData, historicalData]);
 
-  if (error) {
+  // If we have cached data but loading is still true, use the cached data
+  const displayData = chartData || chartDataCacheRef.current;
+
+  if (error && !displayData) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>Chart error: {error}</Text>
@@ -134,7 +229,7 @@ const SensorChart = ({
     );
   }
 
-  if (loading || !chartData) {
+  if ((loading && !displayData) || (!displayData && historicalData.length === 0)) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2196F3" />
@@ -153,15 +248,13 @@ const SensorChart = ({
     );
   }
 
-  // Log rendering to track updates
-  console.log(`Rendering chart for ${type} with ${chartData.datasets[0].data.length} points`);
-
+  // Always use displayData here, which might be the cached version
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{type || 'Sensor'} History</Text>
+      <Text style={styles.title}>{type || 'Sensor'} History ({unit})</Text>
       <LineChart
-        key={`chart-${type}-${historicalData.length}`}
-        data={chartData}
+        key={chartIdRef.current} // Use stable key to prevent recreating the chart
+        data={displayData}
         width={CHART_WIDTH}
         height={CHART_HEIGHT}
         chartConfig={{
@@ -175,7 +268,7 @@ const SensorChart = ({
             borderRadius: 16,
           },
           propsForDots: {
-            r: '4',
+            r: '3', // Reduced dot size for performance
             strokeWidth: '1',
             stroke: color || '#2196F3',
           },
@@ -199,15 +292,15 @@ const SensorChart = ({
         withVerticalLabels={true}
         withHorizontalLabels={true}
         withVerticalLines={false}
-        yAxisSuffix={` ${unit || ''}`}
+        yAxisSuffix={''}
         segments={5}
         // Use fixed y-axis min and max values
-        yAxisMinValue={chartData.minValue}
-        yAxisMaxValue={chartData.maxValue}
-        fromZero={chartData.minValue === 0} // Start from zero if min is zero
+        yAxisMinValue={displayData.minValue}
+        yAxisMaxValue={displayData.maxValue}
+        fromZero={displayData.minValue === 0} // Start from zero if min is zero
         // Ensure the chart doesn't try to auto-scale
-        fromNumber={chartData.minValue}
-        toNumber={chartData.maxValue}
+        fromNumber={displayData.minValue}
+        toNumber={displayData.maxValue}
       />
     </View>
   );
@@ -271,4 +364,16 @@ const styles = StyleSheet.create({
   }
 });
 
-export default SensorChart; 
+// Use memo with custom comparison to prevent unnecessary re-renders
+export default React.memo(SensorChart, (prevProps, nextProps) => {
+  // Only re-render if these props have changed significantly
+  return (
+    prevProps.type === nextProps.type &&
+    Math.abs(prevProps.currentValue - nextProps.currentValue) < 0.1 &&
+    prevProps.thresholdValue === nextProps.thresholdValue &&
+    prevProps.color === nextProps.color &&
+    prevProps.unit === nextProps.unit &&
+    // Only check data length as a simple proxy for data change
+    prevProps.historicalData.length === nextProps.historicalData.length
+  );
+}); 
