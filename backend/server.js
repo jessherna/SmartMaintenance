@@ -5,6 +5,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const authRoutes = require('./routes/auth');
 const sensorRoutes = require('./routes/sensors');
+const safetyRoutes = require('./routes/safety');
 const { startSimulator } = require('./services/sensorSimulator');
 
 // Display configuration status
@@ -30,6 +31,7 @@ app.use(express.json());
 // Routes
 app.use('/auth', authRoutes);
 app.use('/api', sensorRoutes);
+app.use('/api/safety', safetyRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {

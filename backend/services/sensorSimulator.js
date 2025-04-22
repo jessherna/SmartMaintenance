@@ -1,5 +1,7 @@
 // Import controller's updateLatestReadings function (will be added after controller is updated)
 const sensorController = require('../controllers/sensorController');
+const safetyThresholdService = require('./safetyThresholdService');
+const safetyController = require('../controllers/safetyController');
 
 // Configuration for sensor simulation
 const SENSOR_TYPES = {
@@ -34,12 +36,12 @@ let latestReadings = {};
 const generateReading = (sensorType) => {
   const config = SENSOR_TYPES[sensorType];
   const value = Math.random() * (config.max - config.min) + config.min;
+  const timestamp = new Date().toISOString();
   
   return {
     value: parseFloat(value.toFixed(2)),
     unit: config.unit,
-    timestamp: new Date().toISOString(),
-    isSafe: value <= config.safeMax
+    timestamp: timestamp
   };
 };
 
@@ -75,28 +77,16 @@ const startSimulator = (io, interval = 1000) => {
       // Update controller with latest readings for API access
       sensorController.updateLatestReadings(readings);
       
-      // Check for safety alerts
-      const safetyAlerts = Object.entries(readings)
-        .filter(([_, data]) => !data.isSafe)
-        .map(([type, data]) => ({
-          type,
-          value: data.value,
-          unit: data.unit,
-          timestamp: data.timestamp,
-          message: `${type} exceeded safe level: ${data.value} ${data.unit}`
-        }));
+      // Check for safety alerts using the safety threshold service
+      const safetyAlerts = await safetyThresholdService.checkReadings(readings);
       
       // Emit all readings via Socket.IO
       io.emit('sensorReadings', readings);
       
-      // If there are safety alerts, emit them
+      // If there are safety alerts, emit them and process them
       if (safetyAlerts.length > 0) {
         io.emit('safetyAlerts', safetyAlerts);
-        
-        // Log safety alerts to the console
-        safetyAlerts.forEach(alert => {
-          console.log(`SAFETY ALERT: ${alert.message}`);
-        });
+        safetyController.processAlerts(safetyAlerts);
       }
       
     } catch (error) {
