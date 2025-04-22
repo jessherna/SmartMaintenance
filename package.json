@@ -8,7 +8,11 @@
     "dev:backend": "nodemon backend/server.js",
     "dev:frontend": "cd frontend && npx expo start --clear",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "test": "jest"
+    "test": "jest",
+    "test:supabase": "node backend/tests/supabase-auth-test-env.js",
+    "test:influxdb": "node backend/tests/influxdb-test.js",
+    "postinstall": "cd backend && npm install && cd ../frontend && npm install",
+    "setup": "node setup.js"
   },
   "dependencies": {
     "@influxdata/influxdb-client": "^1.35.0",
@@ -25,5 +29,8 @@
     "concurrently": "^8.2.2",
     "jest": "^29.7.0",
     "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
 }
