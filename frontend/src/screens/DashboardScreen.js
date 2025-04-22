@@ -158,9 +158,15 @@ const DashboardScreen = ({ navigation }) => {
   const toggleAlertsModal = () => {
     setAlertsModalVisible(!alertsModalVisible);
   };
+  
+  const handleViewSensorDetails = (sensorType) => {
+    console.log(`Viewing details for ${sensorType}`);
+    // In a real app, you could navigate to a detailed view or open a modal
+    // navigation.navigate('SensorDetails', { type: sensorType });
+  };
 
   const renderSensorCards = () => {
-    if (Object.keys(sensorData).length === 0) {
+    if (!sensorData || Object.keys(sensorData).length === 0) {
       return (
         <Card style={styles.noDataCard}>
           <Card.Content style={styles.noDataContent}>
@@ -170,9 +176,36 @@ const DashboardScreen = ({ navigation }) => {
       );
     }
 
-    return Object.entries(sensorData).map(([type, data]) => (
-      <SensorCard key={type} type={type} data={data} />
-    ));
+    // Safety thresholds for each sensor type
+    const thresholds = {
+      VIBRATION: 2.0,
+      TEMPERATURE: 40.0,
+      CURRENT: 35.0
+    };
+
+    return Object.entries(sensorData).map(([type, data]) => {
+      // Ensure data exists and is properly formatted
+      if (!data) {
+        data = { value: 0, unit: '', isSafe: true };
+      }
+      
+      const sensorType = type ? type.toUpperCase() : '';
+      const threshold = thresholds[sensorType] || (
+        sensorType === 'VIBRATION' ? 10 :
+        sensorType === 'TEMPERATURE' ? 80 :
+        sensorType === 'CURRENT' ? 40 : 50
+      );
+      
+      return (
+        <SensorCard 
+          key={type || Math.random().toString()} 
+          type={type} 
+          data={data} 
+          onViewDetails={handleViewSensorDetails}
+          thresholdValue={threshold}
+        />
+      );
+    });
   };
 
   const renderAlertItem = ({ item }) => (
