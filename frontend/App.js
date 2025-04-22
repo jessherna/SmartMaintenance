@@ -13,6 +13,7 @@ import DashboardScreen from './src/screens/DashboardScreen';
 
 // Context
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { SocketProvider } from './src/context/SocketContext';
 
 const Stack = createStackNavigator();
 
@@ -95,7 +96,13 @@ const AppNavigator = () => {
   
   return (
     <NavigationContainer>
-      {authState.isAuthenticated ? <AppStack /> : <AuthStack />}
+      {authState.isAuthenticated ? (
+        <SocketProvider>
+          <AppStack />
+        </SocketProvider>
+      ) : (
+        <AuthStack />
+      )}
     </NavigationContainer>
   );
 };

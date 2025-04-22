@@ -61,10 +61,10 @@ const generateAllReadings = () => {
 
 /**
  * Start the sensor simulator
- * @param {Object} io - Socket.IO server instance
+ * @param {Object} socketService - Socket.IO service instance
  * @param {Number} interval - Interval in milliseconds between readings
  */
-const startSimulator = (io, interval = 1000) => {
+const startSimulator = (socketService, interval = 1000) => {
   console.log(`Starting sensor simulator with interval: ${interval}ms`);
   
   // Generate and send sensor readings at regular intervals
@@ -81,11 +81,11 @@ const startSimulator = (io, interval = 1000) => {
       const safetyAlerts = await safetyThresholdService.checkReadings(readings);
       
       // Emit all readings via Socket.IO
-      io.emit('sensorReadings', readings);
+      socketService.emitSensorReadings(readings);
       
       // If there are safety alerts, emit them and process them
       if (safetyAlerts.length > 0) {
-        io.emit('safetyAlerts', safetyAlerts);
+        socketService.emitMultipleSafetyAlerts(safetyAlerts);
         safetyController.processAlerts(safetyAlerts);
       }
       

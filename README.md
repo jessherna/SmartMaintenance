@@ -7,7 +7,7 @@ A multi-user propulsion equipment health monitoring app with safety-threshold al
 SmartMaintenance is built in iterative phases:
 
 - **Phase 1:** ✅ Core MVP with auth, data ingestion, basic dashboard
-- **Phase 2:** Safety alerts & real-time updates
+- **Phase 2:** ✅ Safety alerts & real-time updates
 - **Phase 3:** ML anomaly detection
 - **Phase 4:** AR-driven maintenance reports
 - **Phase 5:** KPI dashboard & polishing
@@ -41,11 +41,32 @@ SmartMaintenance is built in iterative phases:
 - [x] Login/Register screens
 - [x] Basic dashboard
 
-**Phase 2 - Safety Alerts & Real-time Updates** (Next Up)
-- [ ] Implement safety threshold alerts
-- [ ] Add real-time dashboard updates
-- [ ] Create alert notification system
+**Phase 2 - Safety Alerts & Real-time Updates** (✅ Completed)
+- [x] Implement safety threshold alerts
+- [x] Configure and update safety thresholds
+- [x] Store alerts in InfluxDB
+- [x] Emit alerts via Socket.IO
+- [x] Add real-time dashboard updates
+- [x] Create alert notification system
 - [ ] Build maintenance request workflow
+
+## Real-time Communication
+
+The application uses Socket.IO for real-time communication between the server and clients:
+
+### Socket.IO Server
+- Manages active client connections
+- Broadcasts sensor readings to all connected clients
+- Emits safety alerts when thresholds are exceeded
+- Supports client subscription management
+- Handles authentication for secure communication
+
+### Socket.IO Client
+- Connects automatically when user is logged in
+- Receives and displays real-time sensor data
+- Shows safety alerts as they occur
+- Maintains connection state and reconnects automatically
+- Provides a context API for easy access to real-time data
 
 ## Quick Start
 
@@ -183,6 +204,11 @@ npm start
 - Tags: sensor_type
 - Timestamp: automatic
 
+**safety_alerts**
+- Fields: value, threshold, message
+- Tags: type (sensor type)
+- Timestamp: automatic
+
 ## API Endpoints
 
 ### Authentication
@@ -193,11 +219,23 @@ npm start
 - `GET /api/sensors` - Get latest sensor readings
 - `GET /api/sensors/history` - Get sensor readings history
 
+### Safety Thresholds
+- `GET /api/safety/thresholds` - Get all safety thresholds
+- `PUT /api/safety/thresholds/:sensorType` - Update safety threshold for a sensor
+- `GET /api/safety/alerts` - Get safety alerts history
+
 ## Socket.IO Events
 
+### Server to Client
 - `sensorReadings` - Real-time sensor data
-- `safetyAlerts` - Safety threshold alerts (Phase 2)
-- `anomalyAlerts` - ML anomaly alerts (Phase 3)
+- `safetyAlerts` - Multiple safety threshold alerts
+- `safetyAlert` - Single safety threshold alert
+- `authenticated` - Authentication confirmation
+
+### Client to Server
+- `subscribe` - Subscribe to a specific channel
+- `unsubscribe` - Unsubscribe from a specific channel
+- `authenticate` - Authenticate the socket connection
 
 ## Testing Resources
 

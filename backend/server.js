@@ -6,6 +6,7 @@ const socketIo = require('socket.io');
 const authRoutes = require('./routes/auth');
 const sensorRoutes = require('./routes/sensors');
 const safetyRoutes = require('./routes/safety');
+const socketService = require('./services/socketService');
 const { startSimulator } = require('./services/sensorSimulator');
 
 // Display configuration status
@@ -24,6 +25,9 @@ const io = socketIo(server, {
   }
 });
 
+// Initialize Socket.IO service
+const socket = socketService.initialize(io);
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -38,19 +42,10 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'Server is running' });
 });
 
-// Socket.IO connection
-io.on('connection', (socket) => {
-  console.log('New client connected');
-  
-  socket.on('disconnect', () => {
-    console.log('Client disconnected');
-  });
-});
-
-// Start sensor simulator with the Socket.IO instance
+// Start sensor simulator with the Socket.IO service
 let sensorSimulator;
 if (process.env.NODE_ENV !== 'test') {
-  sensorSimulator = startSimulator(io);
+  sensorSimulator = startSimulator(socket);
 }
 
 // Global error handler
@@ -65,7 +60,8 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Socket.IO server is active and ready for client connections`);
 });
 
 // Export for testing
-module.exports = { app, server, io, sensorSimulator }; 
+module.exports = { app, server, io, sensorSimulator, socket }; 
